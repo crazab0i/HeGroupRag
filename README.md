@@ -5,4 +5,6 @@ Priority task: Do more research about RAG and hopefully get a knowledge graph mo
 
 LangChain Jupyter Notebook: https://github.com/langchain-ai/rag-from-scratch
 
+LangChain FreeCodeCamp Learn Rag from Scratch https://www.youtube.com/watch?v=sVcwVQRHIc8&t=4643s
+
 I will update the ai papers pdf.
