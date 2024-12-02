@@ -4,6 +4,7 @@ from neo4j import GraphDatabase
 from dotenv import load_dotenv
 import re
 import csv
+from langchain_openai import ChatOpenAI
 
 
 #Code Structure:
@@ -36,16 +37,29 @@ def menu_selection(debug_mode):
         return False
 
 def connect_to_neo4j_DB():
-    load_dotenv("neo4j_pipeline.env")
-    uri = os.getenv("NEO4J_URI")
-    user = os.getenv("NEO4J_USER")
-    password = os.getenv("NEO4J_PASSWORD")
-    global driver
-    driver = GraphDatabase.driver(uri, auth=(user, password))
-    print("Connection Sucessful!!!")
+    try:
+        load_dotenv("neo4j_pipeline.env")
+        uri = os.getenv("NEO4J_URI")
+        user = os.getenv("NEO4J_USER")
+        password = os.getenv("NEO4J_PASSWORD")
+        global driver
+        driver = GraphDatabase.driver(uri, auth=(user, password))
+        print("Connection Sucessful!!!")
+    except:
+        print("\nERROR ~~~ NEO4J CONNECTION FAILURE ~~~ ERROR\n")
 
 def load_langchain_api():
-    load_dotenv("langchain.env")
+    try:
+        load_dotenv("langchain_api.env")
+        os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_KEY")
+        os.environ["LANGCHAIN_TRACING_V2"] = os.getenv("LANGCHAIN_TRACING")
+        os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGCHAIN_API_KEY")
+        os.environ["LANGCHAIN_ENDPOINT"] = os.getenv("LANGCHAIN_ENDPOINT")
+        chat_model = ChatOpenAI(model="gpt-3.5-turbo", )
+        print("Loaded AI Environment Sucessfully\n")
+        return chat_model
+    except:
+        print("\nERROR ~~~ AI ENVIRONMENT FILE FAILURE ~~~ ERROR\n")
 
 def insert_data_menu(debug_mode):
     insert_data_menu_input = input("""
@@ -323,7 +337,7 @@ def main():
     debug_mode = False
     welcome()
     connect_to_neo4j_DB()
-    model = load_langchain_ai()
+    model = load_langchain_api()
     while True:
         menu_choice = menu_selection(debug_mode)
         if menu_choice == False:
