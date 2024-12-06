@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import re
 import csv
 from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
 
 
 #Code Structure:
@@ -24,17 +25,21 @@ def menu_selection(debug_mode):
     Choose the following options: \n
         1 - Insert Data
         d - Debug Mode
-        q - Quit
+        q - Quit\n
     """)
     if user_choice.lower() not in ['1', 'q', 'd']:
         print("\nERROR ~~~ INVALID CHOICE ~~~ ERROR\n")
+
     if user_choice == 'd':
         debug_mode = not debug_mode
         print(f"Debug Mode Set To: {debug_mode}")
+
     if user_choice == '1':
         insert_data_menu(debug_mode)
+
     if user_choice.lower() == 'q':
-        return False
+        return False, debug_mode
+    return True, debug_mode
 
 def connect_to_neo4j_DB():
     try:
@@ -50,7 +55,7 @@ def connect_to_neo4j_DB():
 
 def load_langchain_api():
     try:
-        load_dotenv("langchain_api.env")
+        load_dotenv("langchain.env")
         os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_KEY")
         os.environ["LANGCHAIN_TRACING_V2"] = os.getenv("LANGCHAIN_TRACING")
         os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGCHAIN_API_KEY")
@@ -62,24 +67,47 @@ def load_langchain_api():
         print("\nERROR ~~~ AI ENVIRONMENT FILE FAILURE ~~~ ERROR\n")
 
 def insert_data_menu(debug_mode):
+    model = load_langchain_api()
     insert_data_menu_input = input("""
     Choose The Following Input Methods:\n
-        1 - Insert Host Data\n
-        2 - Insert Pathogen Data\n
-        3 - Insert Vaccine Data\n
+        1 - Insert Host Data
+        2 - Insert Pathogen Data
+        3 - Insert Vaccine Data
+        t - Test
         q - Quit\n
     """)
-    if insert_data_menu_input.lower() not in ['1','2','3','q']:
+    if insert_data_menu_input.lower() not in ['1','2','3','q', 't']:
         print("\nERROR ~~~ INVALID CHOICE ~~~ ERROR\n")
     if insert_data_menu_input.lower() == 'q':
         return False
     if insert_data_menu_input == '1':
         insert_host_data(debug_mode)
     if insert_data_menu_input == '2':
-        insert_pathogen_data_with_structured_host(debug_mode)
+        insert_pathogen_data_menu(model, debug_mode)
     if insert_data_menu_input == '3':
-        insert_pathogen_data_with_unstructured_host(debug_mode)
+        insert_pathogen_data_with_unstructured_host(model, debug_mode)
+    if insert_data_menu_input.lower() == 't':
+        unstructured_host_range = "Plague is primarily a zoonotic infection, occurring in urban or wild rodent populations.  Rodents that could be characterized as enzootic hosts (i.e., in what rodent populations Yersinia pestis is found naturally) have not been conclusively identified, but certain species of rat, vole, mouse, and gerbil are suspected [Ref49: Perry et al., 1997]."
+        host_id_creation_for_unstructured_hosts(unstructured_host_range, model, debug_mode)
     
+def insert_pathogen_data_menu(model, debug_mode):
+    print("\nWelcome to Pathogen Insert Select an Option:\n")
+    while True:
+        user_input = input("""
+        1 - Structured Insertion
+        2 - Unstructured Insertion
+        q - Quit\n""")
+
+        if user_input.lower() not in ['1', '2', 'q']:
+            print("\nERROR ~~~ INVALID CHOICE ~~~ ERROR\n")
+            continue
+        
+        if user_input == '1':
+            insert_pathogen_data_with_structured_host(debug_mode)
+        if user_input == '2':
+            insert_pathogen_data_with_unstructured_host(model, debug_mode)
+        if user_input.lower() == 'q':
+            break
 
 
 #Host
@@ -250,11 +278,77 @@ def insert_pathogen_data_with_structured_host(debug_mode):
 
 
 def host_id_creation_for_unstructured_hosts(unstructured_host_range, model, debug_mode):
-    query = """
-    You are a helpful assistant that turns unstructured ranges of hosts and output the respective ids
-    """
+    restructured_query_template = ChatPromptTemplate([
+    ("system", """
+    You are a helpful assistant that turns unstructured ranges of hosts and output the respective ids. Return a list of numbers. If you are unsure only put 0.
+    2 - Human
+    3 - Mouse
+    4 - Rat
+    5 - Monkey
+    6 - Rabbit
+    7 - Guinea Pig
+    8 - Chicken
+    9 - Ducks
+    12 - Cattle
+    13 - Goat
+    15 - Pig
+    16 - Hamster
+    17 - Sheep
+    18 - Horse
+    19 - Ferret
+    24 - Copper Pheasant
+    26 - chincillas
+    27 - Water buffalo
+    28 - Squirrel
+    29 - Deer
+    30 - Buffalo
+    31 - Bear
+    32 - Deer mouse
+    33 - Vole
+    34 - Raven
+    35 - Brown Trout
+    36 - Dog
+    37 - Cat
+    38 - Turkey
+    39 - Macaque
+    40 - Mogolian Gerbil
+    41 - Gerbil
+    42 - Chimpanzee
+    43 - Bank vole
+    44 - Tree shrew
+    45 - Rainbow trout 
+    59 - None
+    47 - Gray wolf
+    48 - Fish
+    49 - Trouts, salmons & chars
+    50 - Parrot
+    51 - Birds
+    52 - Catfishes
+    53 - Carnivores
+    54 - sei whale
+    55 - Baboon
 
-def insert_pathogen_data_with_unstructured_host(debug_mode):
+    EXAMPLES:
+    1. user query: "Host ranges include the following:  livestock or other herbivores (eg, cattle, sheep, goats, pigs, bison, water buffalo) acquire infection by 
+    consuming contaminated soil or feed; spores are infectious agents that can enter the human body through skin lesions, ingestion, or inhalation; and laboratory 
+    animal models include Guinea pigs, Syrian hamsters, and various mouse models [Ref115:PathPort]."
+    output: 12, 17, 13, 15, 27, 2, 16, 3
+    2. user query: "Cattle"
+    output: 12
+    3. user query: "Plague is primarily a zoonotic infection, occurring in urban or wild rodent populations.  Rodents that could be characterized as enzootic hosts 
+     (i.e., in what rodent populations Yersinia pestis is found naturally) have not been conclusively identified, but certain species of rat, vole, mouse, and gerbil 
+     are suspected [Ref49: Perry et al., 1997]."
+    output: 4, 33, 3, 41, 40
+    """),
+    ("human", "The host range to convert into integer is: {host_range}")])
+    llm_chain = restructured_query_template | model
+    list_output = llm_chain.invoke({"host_range": unstructured_host_range})
+    if debug_mode:
+        print(list_output.content)
+        print(list_output.content.split(', '))
+    return list(map(int, list_output.content.split(', ')))
+
+def insert_pathogen_data_with_unstructured_host(model, debug_mode): 
     pathogen_file_name_input = input("Enter the file name of the data in data folder: \n")
     pathogen_file_path = f"data\{pathogen_file_name_input}"
     error_count = 0
@@ -282,13 +376,19 @@ def insert_pathogen_data_with_unstructured_host(debug_mode):
                     pathogen_protective_immunity = pathogen_file_row["c_protective_immunity"]
                     pathogen_gram = pathogen_file_row["c_gram"]
 
+                    
+                    generated_host_range = host_id_creation_for_unstructured_hosts(unstructured_host_range=pathogen_host_range, model=model, debug_mode=debug_mode)
+
+                    if debug_mode:
+                        print(f"Generated Host Range Prior to Insertion: {generated_host_range}")
+
                     pathogen_batch_data.append({
                         "c_pathogen_id": pathogen_id,
                         "c_pathogen_name": pathogen_name,
                         "c_taxonomy_id": pathogen_taxonomy_id,
                         "c_organism_type": pathogen_organism_type,
                         "c_disease_name": pathogen_disease_name,
-                        "c_host_range": pathogen_host_range,
+                        "c_host_range": generated_host_range,
                         "c_preparation_vo_id": pathogen_preparation_vo_id,
                         "c_vaccine_vo_id": pathogen_vaccine_vo_id,
                         "c_protein_vo_id": pathogen_protein_vo_id,
@@ -326,6 +426,49 @@ def insert_pathogen_data_with_unstructured_host(debug_mode):
     except Exception as e:
         print(f"ERROR ~~~ {e} ~~~ ERROR")
 
+
+#Vaccine
+######################################################################################################
+
+#create nodes for 
+# - delivery method (route) (multiple)
+# - Manufacturer (multiple)
+# - licence 
+# - vaccine type
+# - location licsneed (multiple)
+
+#create properties for
+
+# - vaccine name
+# - proper name
+# - brand name
+# - vaccine id
+# - vo id
+# - Description
+# - Full text
+# - model_host
+# - c_host_specieis_2
+# - preparation
+# - prepartion_vo_id
+# - is combination vaccine (Yes, No)
+# - Adjuvant
+# - Storange
+# - Virulence
+# - Antigen
+# - Allegrn
+# - preservetaive
+# - contraindication
+# - usage_age
+# - vector
+# - curation flag
+# - c_cvx_code
+# - c_cvx_desc
+
+
+#create connections to
+# - pathogen (pathogen_id)
+# - host speciesi (host_spciies_id)
+
 #Main
 ######################################################################################################
 
@@ -337,9 +480,8 @@ def main():
     debug_mode = False
     welcome()
     connect_to_neo4j_DB()
-    model = load_langchain_api()
     while True:
-        menu_choice = menu_selection(debug_mode)
+        menu_choice, debug_mode = menu_selection(debug_mode)
         if menu_choice == False:
             break
 
