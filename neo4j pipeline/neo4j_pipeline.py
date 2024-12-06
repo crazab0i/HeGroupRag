@@ -85,7 +85,7 @@ def insert_data_menu(debug_mode):
     if insert_data_menu_input == '2':
         insert_pathogen_data_menu(model, debug_mode)
     if insert_data_menu_input == '3':
-        insert_pathogen_data_with_unstructured_host(model, debug_mode)
+        insert_vaccine_data(model, debug_mode)
     if insert_data_menu_input.lower() == 't':
         unstructured_host_range = "Plague is primarily a zoonotic infection, occurring in urban or wild rodent populations.  Rodents that could be characterized as enzootic hosts (i.e., in what rodent populations Yersinia pestis is found naturally) have not been conclusively identified, but certain species of rat, vole, mouse, and gerbil are suspected [Ref49: Perry et al., 1997]."
         host_id_creation_for_unstructured_hosts(unstructured_host_range, model, debug_mode)
@@ -224,7 +224,7 @@ def insert_pathogen_data_with_structured_host(debug_mode):
                     pathogen_taxonomy_id = pathogen_file_row["c_taxon_id"]
                     pathogen_disease_name = pathogen_file_row["c_disease_name"]
                     pathogen_host_range = pathogen_file_row["c_host_range"]
-                    pathogen_organism_type = pathogen_file_row["c_organism_type"].split(',') if pathogen_file_row["c_host_range"] else []
+                    pathogen_organism_type = pathogen_file_row["c_organism_type"]
                     pathogen_preparation_vo_id = pathogen_file_row["c_preparation_vo_id"]
                     pathogen_vaccine_vo_id = pathogen_file_row["c_vaccine_vo_id"]
                     pathogen_protein_vo_id = pathogen_file_row["c_protein_vo_id"]
@@ -368,7 +368,7 @@ def insert_pathogen_data_with_unstructured_host(model, debug_mode):
                     pathogen_taxonomy_id = pathogen_file_row["c_taxon_id"]
                     pathogen_disease_name = pathogen_file_row["c_disease_name"]
                     pathogen_host_range = pathogen_file_row["c_host_range"]
-                    pathogen_organism_type = pathogen_file_row["c_organism_type"].split(',') if pathogen_file_row["c_host_range"] else []
+                    pathogen_organism_type = pathogen_file_row["c_organism_type"]
                     pathogen_preparation_vo_id = pathogen_file_row["c_preparation_vo_id"]
                     pathogen_vaccine_vo_id = pathogen_file_row["c_vaccine_vo_id"]
                     pathogen_protein_vo_id = pathogen_file_row["c_protein_vo_id"]
@@ -376,7 +376,6 @@ def insert_pathogen_data_with_unstructured_host(model, debug_mode):
                     pathogen_protective_immunity = pathogen_file_row["c_protective_immunity"]
                     pathogen_gram = pathogen_file_row["c_gram"]
 
-                    
                     generated_host_range = host_id_creation_for_unstructured_hosts(unstructured_host_range=pathogen_host_range, model=model, debug_mode=debug_mode)
 
                     if debug_mode:
@@ -430,45 +429,183 @@ def insert_pathogen_data_with_unstructured_host(model, debug_mode):
 #Vaccine
 ######################################################################################################
 
-#create nodes for 
-# - delivery method (route) (multiple)
-# - Manufacturer (multiple)
-# - licence 
-# - vaccine type
-# - location licsneed (multiple)
+def batch_insert_vaccine(tx, vaccine_batch_data):
+    query = """
+    UNWIND $vaccine_batch_data AS vaccine
+    MERGE (vn: VaccineName {name: vaccine.c_vaccine_name})
+    MERGE (vt: VaccineType {name: vaccine.c_type})
+    MERGE (vs: VaccineStatus {name: vaccine.c_status})
 
-#create properties for
+    MERGE (vn)-[:VACCINE_TYPE]->(vt)
+    MERGE (vn)-[:VACCINE_STATUS]->(vs)
 
-# - vaccine name
-# - proper name
-# - brand name
-# - vaccine id
-# - vo id
-# - Description
-# - Full text
-# - model_host
-# - c_host_specieis_2
-# - preparation
-# - prepartion_vo_id
-# - is combination vaccine (Yes, No)
-# - Adjuvant
-# - Storange
-# - Virulence
-# - Antigen
-# - Allegrn
-# - preservetaive
-# - contraindication
-# - usage_age
-# - vector
-# - curation flag
-# - c_cvx_code
-# - c_cvx_desc
+    WITH vn, vaccine
+    UNWIND vaccine.c_location_licensed AS country
+    MERGE (cl: VaccineCountryLicensed {name: country})
+    MERGE (vn)-[:LICENSED_IN_COUNTRY]->(cl)
+
+    WITH vn, vaccine
+    UNWIND vaccine.c_manufacturer AS manufacturer
+    MERGE (m: VaccineManufacturer {name: manufacturer})
+    MERGE (vn)-[:MANUFACTURED_BY]->(m)
+    
+    WITH vn, vaccine
+    UNWIND vaccine.c_route AS route
+    MERGE (dm: VaccineDeliveryMethod {name: route})
+    MERGE (vn)-[:HAS_DELIVERY_METHOD]->(dm)
+
+    WITH vn, vaccine
+    MATCH (pn:PathogenName {PATHOGEN_ID: vaccine.c_pathogen_id})
+    MERGE (vn)-[:TARGETS_PATHOGEN]->(pn)
+
+    WITH vn, vaccine
+    MATCH (hn: HostName {HOST_ID: toString(vaccine.c_host_species)})
+    MERGE (vn)-[:IN_HOST]->(hn)
+
+    WITH vn, vaccine
+    UNWIND vaccine.c_model_host as model_host_id
+    MATCH (mh: HostName {HOST_ID: toString(model_host_id)})
+    MERGE (vn)-[:MODEL_HOST]-(mh)
+
+    WITH vn, vaccine
+    SET vn.PROPER_NAME = vaccine.c_proper_name
+    SET vn.BRAND_NAME = vaccine.c_brand_name
+    SET vn.VACCINE_ID = vaccine.c_vaccine_id
+    SET vn.VO_ID = vaccine.c_vo_id
+    SET vn.DESCRIPTION = vaccine.c_description
+    SET vn.FULL_TEXT = vaccine.c_full_text
+    SET vn.HOST_SPECIES2 = vaccine.c_host_species2
+    SET vn.PREPARATION = vaccine.c_preparation
+    SET vn.PREPARATION_VO_ID = vaccine.c_preparation_vo_id
+    SET vn.IS_COMBINATION_VACCINE = vaccine.c_is_combination_vaccine
+    SET vn.ADJUVANT = vaccine.c_adjuvant
+    SET vn.STORAGE = vaccine.c_storage
+    SET vn.VIRULENCE = vaccine.c_virulence
+    SET vn.ANTIGEN = vaccine.c_antigen
+    SET vn.ALLERGEN = vaccine.c_allergen
+    SET vn.PRESERVATIVE = vaccine.c_preservative
+    SET vn.CONTRAINDICTATION = vaccine.c_contraindication
+    SET vn.USAGE_AGE = vaccine.c_usage_age
+    SET vn.VECTOR = vaccine.c_vector
+    SET vn.CURATION_FLAG = vaccine.c_curation_flag
+    SET vn.CVX_CODE = vaccine.c_cvx_code
+    SET vn.CVX_DESC = vaccine.c_cvx_desc
+"""
+    tx.run(query, vaccine_batch_data=vaccine_batch_data)
 
 
-#create connections to
-# - pathogen (pathogen_id)
-# - host speciesi (host_spciies_id)
+def insert_vaccine_data(model, debug_mode): 
+    vaccine_file_name_input = input("Enter the file name of the data in data folder: \n")
+    vaccine_file_path = f"data\{vaccine_file_name_input}"
+    error_count = 0
+    error_lines = []
+    try:
+        with open(vaccine_file_path, "r", encoding="utf-8") as vaccine_file:
+            print("File Opened!")
+            vaccine_batch_data = []
+            
+            vaccine_start_time = time.time()
 
+            vaccine_reader = csv.DictReader(vaccine_file)
+            for index, vaccine_file_row in enumerate(vaccine_reader, start=1):
+                try:
+                    vaccine_id = vaccine_file_row["c_vaccine_id"]
+                    vaccine_name = vaccine_file_row["c_vaccine_name"]
+                    vaccine_type = vaccine_file_row["c_type"]
+                    vaccine_is_combination = vaccine_file_row["c_is_combination_vaccine"]
+                    vaccine_description = vaccine_file_row["c_description"]
+                    vaccine_adjuvant = vaccine_file_row["c_adjuvant"]   
+                    vaccine_storage = vaccine_file_row["c_storage"]
+                    vaccine_pathogen_id = vaccine_file_row["c_pathogen_id"]
+                    vaccine_virulence = vaccine_file_row["c_virulence"]
+                    vaccine_preparation = vaccine_file_row["c_preparation"]
+                    vaccine_brand_name = vaccine_file_row["c_brand_name"]
+                    vaccine_full_text = vaccine_file_row["c_full_text"]
+                    vaccine_antigen = vaccine_file_row["c_antigen"]
+                    vaccine_curation_flag = vaccine_file_row["c_curation_flag"]
+                    vaccine_vector = vaccine_file_row["c_vector"]
+                    vaccine_manufacturer_list = vaccine_file_row["c_manufacturer"].split(', ')
+                    vaccine_contraindication = vaccine_file_row["c_contraindication"]
+                    vaccine_status = vaccine_file_row["c_status"]
+                    vaccine_location_licensed_list = vaccine_file_row["c_location_licensed"].split(', ')
+                    vaccine_host_species = vaccine_file_row["c_host_species"]
+                    vaccine_route_list = vaccine_file_row["c_route"].split(', ')
+                    vaccine_vo_id = vaccine_file_row["c_vo_id"]
+                    vaccine_usage_age = vaccine_file_row["c_usage_age"]
+                    vaccine_model_host = vaccine_file_row["c_model_host"]
+                    vaccine_preservative = vaccine_file_row["c_preservative"]
+                    vaccine_allergen = vaccine_file_row["c_allergen"]
+                    vaccine_preparation_vo_id = vaccine_file_row["c_preparation_vo_id"]
+                    vaccine_host_spcecies_2 = vaccine_file_row["c_host_species2"]
+                    vaccine_cvx_code = vaccine_file_row["c_cvx_code"]
+                    vaccine_cvx_desc = vaccine_file_row["c_cvx_desc"]
+                    vaccine_proper_name = vaccine_file_row["c_proper_name"]
+                    
+                    if vaccine_model_host:
+                        generated_model_host_range = host_id_creation_for_unstructured_hosts(vaccine_model_host, model=model, debug_mode=debug_mode)
+                    else:
+                        generated_model_host_range = vaccine_model_host
+
+
+
+                    vaccine_batch_data.append({
+                        "c_vaccine_id": vaccine_id,
+                        "c_vaccine_name": vaccine_name,
+                        "c_type": vaccine_type,
+                        "c_is_combination_vaccine": vaccine_is_combination,
+                        "c_description": vaccine_description,
+                        "c_adjuvant": vaccine_adjuvant,
+                        "c_storage": vaccine_storage,
+                        "c_pathogen_id": vaccine_pathogen_id,
+                        "c_virulence": vaccine_virulence,
+                        "c_preparation": vaccine_preparation,
+                        "c_brand_name": vaccine_brand_name,
+                        "c_full_text": vaccine_full_text,
+                        "c_antigen": vaccine_antigen,
+                        "c_curation_flag": vaccine_curation_flag,
+                        "c_vector": vaccine_vector,
+                        "c_manufacturer": vaccine_manufacturer_list,
+                        "c_contraindication": vaccine_contraindication,
+                        "c_status": vaccine_status,
+                        "c_location_licensed": vaccine_location_licensed_list,
+                        "c_host_species": vaccine_host_species,
+                        "c_route": vaccine_route_list,
+                        "c_vo_id": vaccine_vo_id,
+                        "c_usage_age": vaccine_usage_age,
+                        "c_model_host": generated_model_host_range,
+                        "c_preservative": vaccine_preservative,
+                        "c_allergen": vaccine_allergen,
+                        "c_preparation_vo_id": vaccine_preparation_vo_id,
+                        "c_host_species2": vaccine_host_spcecies_2,
+                        "c_cvx_code": vaccine_cvx_code,
+                        "c_cvx_desc": vaccine_cvx_desc,
+                        "c_proper_name": vaccine_proper_name,
+                    })
+                    if debug_mode:
+                        print(f"""{vaccine_name} with id {vaccine_id} and {vaccine_vo_id} has the manufacter(s) {vaccine_manufacturer_list}\n
+                        Licensed in {vaccine_location_licensed_list} and goes through routes {vaccine_route_list}""")
+                
+                except Exception as e:
+                    print(f"\nERROR ~~~ {e} ~~~ ERROR\n")
+                    error_count += 1
+                    error_lines.append(index)
+                
+                if len(vaccine_batch_data) >= 10:
+                    with driver.session() as session:
+                        session.execute_write(batch_insert_vaccine, vaccine_batch_data)
+                        vaccine_batch_data.clear()
+                        print(f"Inserted The Batch, Current Count Inserted: {index-error_count}")
+            if vaccine_batch_data:
+                with driver.session() as session:
+                    session.execute_write(batch_insert_vaccine, vaccine_batch_data)
+                    vaccine_batch_data.clear()
+                    print(f"Inserted Last Batch!!!")
+            vaccine_end_time = time.time()
+            print(f"""Inserted {index-error_count} Lines Sucessfully in {vaccine_start_time-vaccine_end_time}\n
+            Had {error_count} Errors, Sucess Rate = {(index-error_count)/index* 100}%\n
+            Lines That Failed Insertion: {error_lines}""")
+    except Exception as e:
+        print(f"ERROR ~~~ {e} ~~~ ERROR")
 #Main
 ######################################################################################################
 
