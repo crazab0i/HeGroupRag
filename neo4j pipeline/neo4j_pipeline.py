@@ -601,7 +601,7 @@ def insert_vaccine_data(model, debug_mode):
                     vaccine_batch_data.clear()
                     print(f"Inserted Last Batch!!!")
             vaccine_end_time = time.time()
-            print(f"""Inserted {index-error_count} Lines Sucessfully in {vaccine_start_time-vaccine_end_time}\n
+            print(f"""Inserted {index-error_count} Lines Sucessfully in {vaccine_end_time-vaccine_start_time}\n
             Had {error_count} Errors, Sucess Rate = {(index-error_count)/index* 100}%\n
             Lines That Failed Insertion: {error_lines}""")
     except Exception as e:
