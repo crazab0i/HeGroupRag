@@ -1,0 +1,3 @@
+c_pathogen_id,c_pathogen_name,c_taxon_id,c_disease_name,c_host_range,c_organism_type,c_preparation_vo_id,c_vaccine_vo_id,c_protein_vo_id,c_pathogenesis,c_protective_immunity,c_gram
+111,Yersinia pseudotuberculosis,633,Yersiniosis,,G- bacterium,,,VO_0010796,,,-
+

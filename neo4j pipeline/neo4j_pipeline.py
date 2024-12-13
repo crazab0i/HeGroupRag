@@ -24,10 +24,12 @@ def menu_selection(debug_mode):
     user_choice = input("""
     Choose the following options: \n
         1 - Insert Data
+        2 - VaxGPT
         d - Debug Mode
         q - Quit\n
     """)
-    if user_choice.lower() not in ['1', 'q', 'd']:
+    model = load_langchain_api()
+    if user_choice.lower() not in ['1', '2', 'q', 'd']:
         print("\nERROR ~~~ INVALID CHOICE ~~~ ERROR\n")
 
     if user_choice == 'd':
@@ -35,7 +37,10 @@ def menu_selection(debug_mode):
         print(f"Debug Mode Set To: {debug_mode}")
 
     if user_choice == '1':
-        insert_data_menu(debug_mode)
+        insert_data_menu(model, debug_mode)
+
+    if user_choice == '2':
+        VaxGPT(model, debug_mode)
 
     if user_choice.lower() == 'q':
         return False, debug_mode
@@ -66,8 +71,7 @@ def load_langchain_api():
     except:
         print("\nERROR ~~~ AI ENVIRONMENT FILE FAILURE ~~~ ERROR\n")
 
-def insert_data_menu(debug_mode):
-    model = load_langchain_api()
+def insert_data_menu(model, debug_mode):
     insert_data_menu_input = input("""
     Choose The Following Input Methods:\n
         1 - Insert Host Data
@@ -182,6 +186,15 @@ def batch_insert_pathogen(tx, pathogen_batch_data):
     query = """
     UNWIND $pathogen_batch_data AS pathogen
     MERGE (pn: PathogenName {name: pathogen.c_pathogen_name})
+    SET pn.PATHOGEN_ID = pathogen.c_pathogen_id,
+        pn.PATHOGEN_TAXONOMY_ID = pathogen.c_taxonomy_id,
+        pn.PREPARATION_VO_ID = pathogen.c_preparation_vo_id,
+        pn.VACCINE_VO_ID = pathogen.c_vaccine_vo_id,
+        pn.PROTEIN_VO_ID = pathogen.c_protein_vo_id,
+        pn.PATHOGENESIS = pathogen.c_pathogenesis,
+        pn.PROTECTIVE_IMMUNITY = pathogen.c_protective_immunity,
+        pn.GRAM = pathogen.c_gram
+        
     MERGE (pt: PathogenType {name: pathogen.c_organism_type})
     MERGE (dn: DiseaseName {name: pathogen.c_disease_name})
     
@@ -189,19 +202,13 @@ def batch_insert_pathogen(tx, pathogen_batch_data):
     MERGE (pn)-[:TARGETS_DISEASE]->(dn)
 
     WITH pn, pathogen
-    UNWIND pathogen.c_host_range as host_id
+    UNWIND pathogen.c_host_range AS host_id
     MATCH (hn:HostName {HOST_ID: toString(host_id)})
     MERGE (pn)-[:TARGET_HOST]->(hn)
 
-    SET pn.PATHOGEN_ID = pathogen.c_pathogen_id
-    SET pn.PATHOGEN_TAXONOMY_ID = pathogen.c_taxonomy_id
-    SET pn.PREPARATION_VO_ID = pathogen.c_preparation_vo_id
-    SET pn.VACCINE_VO_ID = pathogen.c_vaccine_vo_id
-    SET pn.PROTEIN_VO_ID = pathogen.c_protein_vo_id
-    SET pn.PATHOGENESIS = pathogen.c_pathogenesis
-    SET pn.PROTECTIVE_IMMUNITY = pathogen.c_protective_immunity
-    SET pn.GRAM = pathogen.c_gram
+
     """
+
     tx.run(query, pathogen_batch_data=pathogen_batch_data)
 
 def insert_pathogen_data_with_structured_host(debug_mode):
@@ -280,7 +287,7 @@ def insert_pathogen_data_with_structured_host(debug_mode):
 def host_id_creation_for_unstructured_hosts(unstructured_host_range, model, debug_mode):
     restructured_query_template = ChatPromptTemplate([
     ("system", """
-    You are a helpful assistant that turns unstructured ranges of hosts and output the respective ids. Return a list of numbers. If you are unsure only put 0.
+    You are a helpful assistant that turns unstructured ranges of hosts and output the respective ids. Return a list of numbers. If you are unsure or field is empty only put 0.
     2 - Human
     3 - Mouse
     4 - Rat
@@ -363,7 +370,7 @@ def insert_pathogen_data_with_unstructured_host(model, debug_mode):
             pathogen_reader = csv.DictReader(pathogen_file)
             for index, pathogen_file_row in enumerate(pathogen_reader, start=1):
                 try:
-                    pathogen_id = pathogen_file_row["c_pathogen_id"]
+                    pathogen_id = pathogen_file_row["c_pathogen_id"] 
                     pathogen_name = pathogen_file_row["c_pathogen_name"]
                     pathogen_taxonomy_id = pathogen_file_row["c_taxon_id"]
                     pathogen_disease_name = pathogen_file_row["c_disease_name"]
@@ -583,7 +590,8 @@ def insert_vaccine_data(model, debug_mode):
                     })
                     if debug_mode:
                         print(f"""{vaccine_name} with id {vaccine_id} and {vaccine_vo_id} has the manufacter(s) {vaccine_manufacturer_list}\n
-                        Licensed in {vaccine_location_licensed_list} and goes through routes {vaccine_route_list}""")
+                        Licensed in {vaccine_location_licensed_list} and goes through routes {vaccine_route_list}
+                        Description: {vaccine_description}""")
                 
                 except Exception as e:
                     print(f"\nERROR ~~~ {e} ~~~ ERROR\n")
@@ -606,6 +614,34 @@ def insert_vaccine_data(model, debug_mode):
             Lines That Failed Insertion: {error_lines}""")
     except Exception as e:
         print(f"ERROR ~~~ {e} ~~~ ERROR")
+
+
+#VaxGPT
+######################################################################################################
+
+def VaxGPT(model, debug_mode):
+    pass
+
+def user_query_to_cypher_query(user_input, model, debug_mode):
+    cypher_query_generation_template = ChatPromptTemplate([
+        ("system", """
+        You are a helpful assistant that rewrites user queries into Cypher queries for a Neo4j Vaccine database. 
+        Include both nodes, relationships, and relevant properties in the queries. Use a default limit of 5 if the user does not specify.
+        
+        -Node Types and Properties:
+        - DiseaseName: (name)
+        - HostName:(HOST_ID, HOST_SCIENTIFIC_NAME, HOST_TAXONOMY_ID, name)
+        - PathogenName: (GRAM, PATHOGENESIS, PATHOGEN_ID, PATHOGEN_TAXONOMY_ID, PREPARATION_VO_ID, PROTECTIVE_IMMUNITY, PROTEIN_VO_ID, VACCINE_VO_ID, name)
+        - PathogenType: (name)
+        - VaccineCountryLicensed: (name)
+        - VaccineDeliveryMethod (name)
+        - VaccineManufacturer: (name)
+        - VaccineName: (name)
+        - VaccineStatus: (name)
+        - VaccineType
+        """)
+    ])
+
 #Main
 ######################################################################################################
 
