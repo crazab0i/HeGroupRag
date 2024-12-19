@@ -1,6 +1,8 @@
 from django.shortcuts import render
 from django.http import JsonResponse
+import os
 
+openai_api_key = os.environ
 # Create your views here.
 def chatbot(request): 
     if request.method == 'POST':
