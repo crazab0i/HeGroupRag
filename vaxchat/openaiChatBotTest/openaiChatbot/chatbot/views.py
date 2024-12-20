@@ -125,7 +125,7 @@ def generic_response(user_query):
 
 def ask_openai(message):
     decision_boolean = determine_if_vaccine_related(message)
-    if decision_boolean == "true":
+    if decision_boolean.lower() == "true":
         cypher_query = user_query_to_cypher(message)
         final_answer = context_generating_answer(cypher_query, message)
     else:
